@@ -87,6 +87,15 @@ async fn main() {
                 64.0,
                 BLACK,
             );
+            let tip = "press space to restart";
+            let tip_dimension = measure_text("press space to restart", None, 32, 1.0);
+            draw_text(
+                tip,
+                (screen_width() - tip_dimension.width) / 2.0,
+                screen_height() / 2.0 + text_dimension.offset_y,
+                32.0,
+                BLACK,
+            );
             if is_key_pressed(KeyCode::Space) {
                 gameover = false;
                 circle.x = screen_width() / 2.0;
