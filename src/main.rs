@@ -9,6 +9,8 @@ async fn main() {
     rand::srand(miniquad::date::now() as u64);
     //方块集合
     let mut squares: Vec<Shape> = vec![];
+    //子弹集合
+    let mut bullets: Vec<Shape> = vec![];
     //圆
     let mut circle = Shape {
         size: 32.0,
@@ -16,7 +18,9 @@ async fn main() {
         x: screen_width() / 2.0,
         y: screen_height() / 2.0,
         color: YELLOW,
+        collided: false,
     };
+    let mut shoot_interval = 0.0;
     //游戏结束标志
     let mut gameover = false;
     loop {
@@ -45,8 +49,37 @@ async fn main() {
                 circle.size / 2.0,
                 screen_height() - circle.size / 2.0,
             );
+            if is_key_pressed(KeyCode::Space) && (get_time() - shoot_interval) >= 0.5 {
+                shoot_interval = get_time();
+                bullets.push(Shape {
+                    x: circle.x,
+                    y: circle.y - circle.size / 2.0,
+                    size: 5.0,
+                    speed: circle.speed * 2.0,
+                    color: MAGENTA,
+                    collided: false,
+                })
+            }
         }
         draw_circle(circle.x, circle.y, circle.size / 2.0, circle.color);
+        //生成子弹
+        for bullet in &mut bullets {
+            bullet.y -= bullet.speed * delta_time;
+        }
+        bullets.retain(|bullet| bullet.y > -bullet.size);
+        bullets.retain(|bullet| !bullet.collided);
+        squares.retain(|square| !square.collided);
+        for bullet in bullets.iter_mut() {
+            for square in squares.iter_mut() {
+                if bullet.circle_collides_with(square) {
+                    bullet.collided = true;
+                    square.collided = true;
+                }
+            }
+        }
+        for bullet in &bullets {
+            draw_circle(bullet.x, bullet.y, bullet.size / 2.0, bullet.color);
+        }
         //生成方块
         if !gameover {
             if rand::gen_range(0, 99) >= 95 {
@@ -57,6 +90,7 @@ async fn main() {
                     x: rand::gen_range(0.0, screen_width() - size),
                     y: -size,
                     color: COLORS.choose().unwrap().clone(),
+                    collided: false,
                 })
             }
             //下落
@@ -101,6 +135,7 @@ async fn main() {
                 circle.x = screen_width() / 2.0;
                 circle.y = screen_height() / 2.0;
                 squares.clear();
+                bullets.clear();
             }
         }
         next_frame().await;
@@ -113,6 +148,7 @@ struct Shape {
     x: f32,
     y: f32,
     color: Color,
+    collided: bool,
 }
 
 impl Shape {
