@@ -1,12 +1,13 @@
 use macroquad::prelude::*;
 use macroquad::rand::ChooseRandom;
-
-const MOVEMENT_SPEED: f32 = 200.0;
-const COLORS: [Color; 5] = [RED, BLACK, PURPLE, PINK, LIGHTGRAY];
 #[macroquad::main("space_ship")]
 async fn main() {
     //随机数种子
     rand::srand(miniquad::date::now() as u64);
+    //移动速度
+    const MOVEMENT_SPEED: f32 = 200.0;
+    //方块颜色组
+    const COLORS: [Color; 5] = [RED, BLACK, PURPLE, PINK, LIGHTGRAY];
     //方块集合
     let mut squares: Vec<Shape> = vec![];
     //子弹集合
@@ -20,13 +21,21 @@ async fn main() {
         color: YELLOW,
         collided: false,
     };
+    //上次射击时间
     let mut shoot_interval = 0.0;
     //游戏结束标志
     let mut gameover = false;
+    
+    //游戏循环
     loop {
+        //设置背景颜色
         clear_background(DARKGREEN);
-        let delta_time = get_frame_time();
+        
         if !gameover {
+            //当前帧和上一帧的时间间隔
+            let delta_time = get_frame_time();
+            
+            //圆的移动
             if is_key_down(KeyCode::W) {
                 circle.y -= MOVEMENT_SPEED * delta_time;
             }
@@ -39,6 +48,7 @@ async fn main() {
             if is_key_down(KeyCode::D) {
                 circle.x += MOVEMENT_SPEED * delta_time;
             }
+            //限定圆的移动范围
             circle.x = clamp(
                 circle.x,
                 circle.size / 2.0,
@@ -49,7 +59,9 @@ async fn main() {
                 circle.size / 2.0,
                 screen_height() - circle.size / 2.0,
             );
-            if is_key_pressed(KeyCode::Space) && (get_time() - shoot_interval) >= 0.5 {
+            
+            //按下空格生成子弹 间隔0.1秒一次
+            if is_key_pressed(KeyCode::Space) && (get_time() - shoot_interval) >= 0.1 {
                 shoot_interval = get_time();
                 bullets.push(Shape {
                     x: circle.x,
@@ -60,28 +72,8 @@ async fn main() {
                     collided: false,
                 })
             }
-        }
-        draw_circle(circle.x, circle.y, circle.size / 2.0, circle.color);
-        //生成子弹
-        for bullet in &mut bullets {
-            bullet.y -= bullet.speed * delta_time;
-        }
-        bullets.retain(|bullet| bullet.y > -bullet.size);
-        bullets.retain(|bullet| !bullet.collided);
-        squares.retain(|square| !square.collided);
-        for bullet in bullets.iter_mut() {
-            for square in squares.iter_mut() {
-                if bullet.circle_collides_with(square) {
-                    bullet.collided = true;
-                    square.collided = true;
-                }
-            }
-        }
-        for bullet in &bullets {
-            draw_circle(bullet.x, bullet.y, bullet.size / 2.0, bullet.color);
-        }
-        //生成方块
-        if !gameover {
+            
+            //生成方块
             if rand::gen_range(0, 99) >= 95 {
                 let size = rand::gen_range(16.0, 64.0);
                 squares.push(Shape {
@@ -93,24 +85,52 @@ async fn main() {
                     collided: false,
                 })
             }
-            //下落
+            
+            //方块下落和子弹前进
             for square in &mut squares {
                 square.y += delta_time * square.speed;
             }
-            //移除外边的方块
+            for bullet in &mut bullets {
+                bullet.y -= bullet.speed * delta_time;
+            }
+            
+            //移除外边的方块和子弹
             squares.retain(|square| square.y < screen_height() + square.size);
+            bullets.retain(|bullet| bullet.y > -bullet.size);
+            
+            //移除碰撞过的方块和子弹
+            squares.retain(|square| !square.collided);
+            bullets.retain(|bullet| !bullet.collided);
         }
-        for square in &squares {
-            draw_rectangle(square.x, square.y, square.size, square.size, square.color);
-        }
-        //碰撞检测
+        
+        //圆和方块的碰撞检测
         if squares
             .iter()
             .any(|square| circle.circle_collides_with(square))
         {
             gameover = true;
         }
-
+        
+        //子弹和方块的碰撞检测
+        for bullet in bullets.iter_mut() {
+            for square in squares.iter_mut() {
+                if bullet.circle_collides_with(square) {
+                    bullet.collided = true;
+                    square.collided = true;
+                }
+            }
+        }
+        
+        //图像绘制
+        draw_circle(circle.x, circle.y, circle.size / 2.0, circle.color);
+        for bullet in &bullets {
+            draw_circle(bullet.x, bullet.y, bullet.size / 2.0, bullet.color);
+        }
+        for square in &squares {
+            draw_rectangle(square.x, square.y, square.size, square.size, square.color);
+        }
+        
+        //游戏结束的提示和重开
         if gameover {
             let text = "GAME OVER!";
             let text_dimension = measure_text(text, None, 64, 1.0);
@@ -152,6 +172,7 @@ struct Shape {
 }
 
 impl Shape {
+    //判断圆和方块是否碰撞
     fn circle_collides_with(&self, other: &Self) -> bool {
         self.circle().overlaps_rect(&other.rect())
     }
@@ -163,7 +184,6 @@ impl Shape {
             h: self.size,
         }
     }
-
     fn circle(&self) -> Circle {
         Circle {
             x: self.x,
