@@ -2,6 +2,22 @@ use macroquad::prelude::*;
 use macroquad::rand::ChooseRandom;
 use std::fs;
 
+const FRAGMENT_SHADER: &str = include_str!("starfield-shader.glsl");
+const VERTEX_SHADER: &str = "#version 100
+attribute vec3 position;
+attribute vec2 texcoord;
+attribute vec4 color0;
+varying float iTime;
+
+uniform mat4 Model;
+uniform mat4 Projection;
+uniform vec4 _Time;
+
+void main() {
+    gl_Position = Projection * Model * vec4(position, 1);
+    iTime = _Time.x;
+}
+";
 #[macroquad::main("space_ship")]
 async fn main() {
     //随机数种子
@@ -9,7 +25,7 @@ async fn main() {
     //移动速度
     const MOVEMENT_SPEED: f32 = 200.0;
     //方块颜色组
-    const COLORS: [Color; 5] = [RED, BLACK, PURPLE, PINK, LIGHTGRAY];
+    const COLORS: [Color; 5] = [RED, SKYBLUE, PURPLE, PINK, LIGHTGRAY];
     //射击间隔
     const SHOOT_INTERVAL: f64 = 0.5;
     //游戏状态
@@ -35,10 +51,42 @@ async fn main() {
         color: YELLOW,
         collided: false,
     };
+    //shader
+    let mut direction_modifier = 0.0;
+    let render_target = render_target(320, 150);
+    render_target.texture.set_filter(FilterMode::Nearest);
+    let material = load_material(
+        ShaderSource::Glsl {
+            vertex: VERTEX_SHADER,
+            fragment: FRAGMENT_SHADER,
+        },
+        MaterialParams {
+            uniforms: vec![
+                UniformDesc::new("iResolution", UniformType::Float2),
+                UniformDesc::new("direction_modifier", UniformType::Float1),
+            ],
+            ..Default::default()
+        },
+    )
+    .unwrap();
     //游戏循环
     loop {
         //设置背景颜色
         clear_background(DARKGREEN);
+        material.set_uniform("iResolution", (screen_width(), screen_height()));
+        material.set_uniform("direction_modifier", direction_modifier);
+        gl_use_material(&material);
+        draw_texture_ex(
+            &render_target.texture,
+            0.,
+            0.,
+            WHITE,
+            DrawTextureParams {
+                dest_size: Some(vec2(screen_width(), screen_height())),
+                ..Default::default()
+            },
+        );
+        gl_use_default_material();
         //当前帧和上一帧的时间间隔
         let delta_time = get_frame_time();
         match game_state {
@@ -172,9 +220,11 @@ async fn main() {
                 }
                 if is_key_down(KeyCode::A) {
                     circle.x -= MOVEMENT_SPEED * delta_time;
+                    direction_modifier -= 0.1 * delta_time;
                 }
                 if is_key_down(KeyCode::D) {
                     circle.x += MOVEMENT_SPEED * delta_time;
+                    direction_modifier += 0.1 * delta_time;
                 }
                 //限定圆的移动范围
                 circle.x = clamp(
