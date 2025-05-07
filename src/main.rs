@@ -1,5 +1,6 @@
 use macroquad::prelude::*;
 use macroquad::rand::ChooseRandom;
+use macroquad_particles::{ColorCurve, Emitter, EmitterConfig};
 use std::fs;
 
 const FRAGMENT_SHADER: &str = include_str!("starfield-shader.glsl");
@@ -42,6 +43,8 @@ async fn main() {
     let mut squares: Vec<Shape> = vec![];
     //子弹集合
     let mut bullets: Vec<Shape> = vec![];
+    //爆炸集合
+    let mut explosions: Vec<(Emitter, Vec2)> = vec![];
     //圆
     let mut circle = Shape {
         size: 32.0,
@@ -51,6 +54,15 @@ async fn main() {
         color: YELLOW,
         collided: false,
     };
+    //圆的粒子
+    let mut circle_explosion = Emitter::new(EmitterConfig {
+        one_shot: false,
+        amount: circle.size.round() as u32 * 2,
+        initial_direction: Vec2::new(0.0, 1.0),
+        initial_direction_spread: 1.0,
+        initial_velocity: 100.0,
+        ..particle_explosion()
+    });
     //shader
     let mut direction_modifier = 0.0;
     let render_target = render_target(320, 150);
@@ -100,6 +112,7 @@ async fn main() {
                     score = 0;
                     squares.clear();
                     bullets.clear();
+                    explosions.clear();
                     game_state = GameState::Playing;
                 }
                 //生成方块
@@ -279,6 +292,7 @@ async fn main() {
                 //移除外边的方块和子弹
                 squares.retain(|square| square.y < screen_height() + square.size);
                 bullets.retain(|bullet| bullet.y > -bullet.size);
+                explosions.retain(|(explosion, _)| explosion.config.emitting);
 
                 //移除碰撞过的方块和子弹
                 squares.retain(|square| !square.collided);
@@ -303,17 +317,28 @@ async fn main() {
                             square.collided = true;
                             score += square.size.round() as u32;
                             high_score = high_score.max(score);
+                            explosions.push((
+                                Emitter::new(EmitterConfig {
+                                    amount: square.size.round() as u32 * 2,
+                                    ..particle_explosion()
+                                }),
+                                vec2(square.x, square.y),
+                            ));
                         }
                     }
                 }
 
                 //图像绘制
                 draw_circle(circle.x, circle.y, circle.size / 2.0, circle.color);
+                circle_explosion.draw(Vec2::new(circle.x, circle.y + circle.size / 2.0));
                 for bullet in &bullets {
                     draw_circle(bullet.x, bullet.y, bullet.size / 2.0, bullet.color);
                 }
                 for square in &squares {
                     draw_rectangle(square.x, square.y, square.size, square.size, square.color);
+                }
+                for (explosion, coords) in explosions.iter_mut() {
+                    explosion.draw(*coords);
                 }
                 draw_text(
                     format!("Score: {}", score).as_str(),
@@ -336,7 +361,27 @@ async fn main() {
         next_frame().await;
     }
 }
-
+fn particle_explosion() -> EmitterConfig {
+    EmitterConfig {
+        local_coords: false,
+        one_shot: true,
+        emitting: true,
+        lifetime: 0.6,
+        lifetime_randomness: 0.3,
+        explosiveness: 0.65,
+        initial_direction_spread: 2.0 * std::f32::consts::PI,
+        initial_velocity: 300.0,
+        initial_velocity_randomness: 0.8,
+        size: 3.0,
+        size_randomness: 0.3,
+        colors_curve: ColorCurve {
+            start: RED,
+            mid: ORANGE,
+            end: RED,
+        },
+        ..Default::default()
+    }
+}
 struct Shape {
     size: f32,
     speed: f32,
